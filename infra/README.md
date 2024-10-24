@@ -20,7 +20,7 @@ __terraform init__
 _________________________________________
 step 3: Use terraform commands to create the infrastructure
 
-___terraform validate__
+__terraform validate__
 
 __terraform plan__
 
