@@ -292,7 +292,7 @@ resource "aws_instance" "bastion" {
 #EKS Cluster
 resource "aws_eks_cluster" "eks_cluster" {
   name     = "keerthi-eks-cluster"
-  role_arn = "arn:aws:iam::123456789012:role/eksClusterRole" 
+  role_arn = aws_iam_role.eks_cluster_role.arn
   vpc_config {
     subnet_ids = [ aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id ]
   }
@@ -301,15 +301,15 @@ resource "aws_eks_cluster" "eks_cluster" {
 
 #Fargate Profile
 resource "aws_eks_fargate_profile" "my_fargate_profile" {
-  cluster_name = aws_eks_cluster.keerthi_eks_cluster.name
+  cluster_name = aws_eks_cluster.eks_cluster.name
   fargate_profile_name = "my-fargate-profile"
-  pod_execution_role_arn = "arn:aws:iam::123456789012:role/eksFargatePodExecutionRole" 
+  pod_execution_role_arn = aws_iam_role.eks_fargate_role.arn
   subnet_ids = [
     aws_subnet.private_subnet_1.id,
     aws_subnet.private_subnet_2.id,
   ]
   selector {
-    namespace = "nestapp"
+    namespace = var.namespace
   }
 }
 
@@ -362,6 +362,7 @@ resource "aws_iam_role_policy_attachment" "eks_fargate_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
 }
 
+
 # Target Group for EKS Services
 resource "aws_lb_target_group" "eks_target_group" {
   name     = "eks-target-group"
@@ -384,4 +385,25 @@ resource "aws_lb_listener" "http_listener" {
     type = "forward"
     target_group_arn = aws_lb_target_group.eks_target_group.arn
   }
+}
+
+
+# RDS PostgreSQL Instance in Private Subnet
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "rds-subnet-group"
+  subnet_ids = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
+  tags = {    Name = "RDS-Subnet-Group"  }
+}
+
+resource "aws_db_instance" "postgres" {
+  identifier          = "my-postgres-db"
+  engine              = "postgres"
+  instance_class      = "db.t3.micro"
+  allocated_storage   = 20
+  username            = var.db_username
+  password            = var.db_password
+  db_subnet_group_name = aws_db_subnet_group.rds_subnet_group.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  skip_final_snapshot = true
+  tags = {    Name = "My-Postgres-DB"  }
 }
