@@ -13,12 +13,20 @@ Prerequisites
 
 Steps to get started
 --------------------------------
-Step 1: Clone the Repository
-Step 2: Initialize terraform - terraform init
-step 3: Use terraform commands to create the infrastructure
+# Step 1: Clone the Repository
+
+# Step 2: Initialize terraform - terraform init
+
+# step 3: Use terraform commands to create the infrastructure
+
 terraform validate
+
 terraform plan
+
 terraform apply -auto-approve
-Step 4: Verify the resources creates using IaC in AWS management console
-Step 5: If you want to delete the resources use terraform destroy command
+
+# Step 4: Verify the resources creates using IaC in AWS management console
+
+# Step 5: If you want to delete the resources use terraform destroy command
+
 terraform destroy
