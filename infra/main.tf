@@ -66,7 +66,8 @@ resource "aws_route_table_association" "public_subnet_2_association" {
 
 # NAT Gateway for Private Subnets
 resource "aws_eip" "nat_eip" {
-  vpc = true
+  domain = "vpc"
+  tags = { Name = "terra_nat_eip" }
 }
 
 resource "aws_nat_gateway" "nat_gw" {
@@ -94,6 +95,35 @@ resource "aws_route_table_association" "private_subnet_2_association" {
   subnet_id      = aws_subnet.private_subnet_2.id
   route_table_id = aws_route_table.private_route_table.id
 }
+
+# Route 53 Hosted Zone for Custom Domain
+resource "aws_route53_zone" "main_zone" {
+  name = var.domain_name  
+  tags = {    Name = "MainHostedZone"  }
+}
+
+# A Record set in Route 53
+resource "aws_route53_record" "www" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = "www.${var.domain_name}"  
+  type    = "A"
+  alias {
+    name                   = aws_lb.main_lb.dns_name  
+    zone_id                = aws_lb.main_lb.zone_id  
+    evaluate_target_health = true
+  }
+}
+
+# Load Balancer 
+resource "aws_lb" "main_lb" {
+  name               = "main-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.lb_sg.id]
+  subnets            = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
+  tags = {  Name = "Main-LB" }
+}
+
 
 # Security groups for bastion
 resource "aws_security_group" "bastion_sg" {
