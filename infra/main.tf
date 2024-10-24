@@ -288,3 +288,76 @@ resource "aws_instance" "bastion" {
   key_name               = "myKeyPair" 
   tags = {  Name = "BastionHost"  }
 }
+
+#EKS Cluster
+resource "aws_eks_cluster" "eks_cluster" {
+  name     = "keerthi-eks-cluster"
+  role_arn = "arn:aws:iam::123456789012:role/eksClusterRole" 
+  vpc_config {
+    subnet_ids = [ aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id ]
+  }
+  depends_on = [aws_iam_role_policy_attachment.eksClusterPolicy]
+}
+
+#Fargate Profile
+resource "aws_eks_fargate_profile" "my_fargate_profile" {
+  cluster_name = aws_eks_cluster.keerthi_eks_cluster.name
+  fargate_profile_name = "my-fargate-profile"
+  pod_execution_role_arn = "arn:aws:iam::123456789012:role/eksFargatePodExecutionRole" 
+  subnet_ids = [
+    aws_subnet.private_subnet_1.id,
+    aws_subnet.private_subnet_2.id,
+  ]
+  selector {
+    namespace = "nestapp"
+  }
+}
+
+#IAM Role-EKS Cluster
+resource "aws_iam_role" "eks_cluster_role" {
+  name = "eksClusterRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Principal = {
+          Service = "eks.amazonaws.com"
+        }
+        Effect    = "Allow"
+        Sid       = ""
+      },
+    ]
+  })
+}
+
+# IAM Role-Fargate
+resource "aws_iam_role" "eks_fargate_role" {
+  name = "eksFargatePodExecutionRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Principal = {
+          Service = "eks-fargate.amazonaws.com"
+        }
+        Effect    = "Allow"
+        Sid       = ""
+      },
+    ]
+  })
+}
+
+#IAM Policies Attachments
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  role       = aws_iam_role.eks_cluster_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_fargate_policy" {
+  role       = aws_iam_role.eks_fargate_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
+}
