@@ -102,18 +102,6 @@ resource "aws_route53_zone" "main_zone" {
   tags = {    Name = "MainHostedZone"  }
 }
 
-# A Record set in Route 53
-resource "aws_route53_record" "www" {
-  zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "www.${var.domain_name}"  
-  type    = "A"
-  alias {
-    name                   = aws_lb.main_lb.dns_name  
-    zone_id                = aws_lb.main_lb.zone_id  
-    evaluate_target_health = true
-  }
-}
-
 # Load Balancer 
 resource "aws_lb" "main_lb" {
   name               = "main-load-balancer"
@@ -179,6 +167,12 @@ resource "aws_security_group" "eks_sg" {
     protocol    = "tcp"
     security_groups = [aws_security_group.lb_sg.id]
   }
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    security_groups = [aws_security_group.lb_sg.id]
+  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -207,4 +201,80 @@ resource "aws_security_group" "rds_sg" {
   tags = {    Name = "RDS-SG"  }
 }
 
+#S3 Bucket
+resource "aws_s3_bucket" "terra_bucket" {
+  bucket = "my-nextjs-terra-bucket090"  
+  acl    = "public-read"
+  tags = {  Name = "Next.js Bucket"  }
+}
 
+#Cloudfront
+resource "aws_cloudfront_distribution" "my_distribution" {
+  origin {
+    domain_name = aws_s3_bucket.terra_bucket.bucket_regional_domain_name
+    origin_id   = "S3Origin"
+    custom_origin_config {
+      origin_protocol_policy = "http-only"
+      http_port             = 80
+      https_port            = 443
+      origin_ssl_protocols  = ["TLSv1.2"]
+    }
+  }
+  enabled = true
+  is_ipv6_enabled = true
+  default_root_object = "index.html"
+  default_cache_behavior {
+    target_origin_id = "S3Origin"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods = ["GET", "HEAD"]
+    cached_methods = ["GET", "HEAD"]
+    min_ttl     = 0
+    default_ttl = 86400
+    max_ttl     = 31536000
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+  viewer_certificate {
+    acm_certificate_arn = aws_acm_certificate.keerthi_cert.arn
+    ssl_support_method  = "sni-only"
+  }
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+  tags = {  Name = "CloudFront Distribution-next"  }
+}
+
+# ACM Certificate
+resource "aws_acm_certificate" "keerthi_cert" {
+  domain_name       = var.domain_name  
+  validation_method = "DNS"
+  tags = {  Name = "ACM Certificate-next"  }
+}
+
+# A Record set in Route 53
+resource "aws_route53_record" "CloudFront_record" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = "www.${var.domain_name}"  
+  type    = "A"
+  alias {
+    name                   = aws_cloudfront_distribution.my_distribution.domain_name 
+    zone_id                = aws_cloudfront_distribution.my_distribution.hosted_zone_id  
+    evaluate_target_health = true
+  }
+}
+
+# DNS Validation for ACM Certificate 
+resource "aws_route53_record" "cert_validation_record" {
+  count = length(aws_acm_certificate.keerthi_cert.domain_validation_options)
+  zone_id = aws_route53_zone.main_zone.id
+  name     = aws_acm_certificate.keerthi_cert.domain_validation_options[count.index].resource_record_name
+  type     = aws_acm_certificate.keerthi_cert.domain_validation_options[count.index].resource_record_type
+  ttl      = 60
+  records   = [aws_acm_certificate.keerthi_cert.domain_validation_options[count.index].resource_record_value]
+}
