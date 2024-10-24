@@ -204,7 +204,6 @@ resource "aws_security_group" "rds_sg" {
 #S3 Bucket
 resource "aws_s3_bucket" "terra_bucket" {
   bucket = "my-nextjs-terra-bucket090"  
-  acl    = "public-read"
   tags = {  Name = "Next.js Bucket"  }
 }
 
@@ -296,7 +295,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   vpc_config {
     subnet_ids = [ aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id ]
   }
-  depends_on = [aws_iam_role_policy_attachment.eksClusterPolicy]
+  depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
 
 #Fargate Profile
