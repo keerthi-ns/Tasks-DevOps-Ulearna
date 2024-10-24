@@ -23,7 +23,7 @@ terraform validate
 terraform plan
 
 terraform apply -auto-approve
-
+___________________________________________
 Step 4: Verify the resources creates using IaC in AWS management console
 ______________________________
 Step 5: If you want to delete the resources use terraform destroy command
