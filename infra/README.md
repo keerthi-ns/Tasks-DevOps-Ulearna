@@ -14,18 +14,21 @@ This will help you to setup AWS infrastructure using Terraform. It includes sett
 
 Step 1: Clone the Repository
 _____________________________________
-Step 2: Initialize terraform - terraform init
+Step 2: Initialize terraform 
+
+__terraform init__
 _________________________________________
 step 3: Use terraform commands to create the infrastructure
-______________________________
-terraform validate
 
-terraform plan
+___terraform validate__
 
-terraform apply -auto-approve
+__terraform plan__
+
+__terraform apply -auto-approve__
 ___________________________________________
 Step 4: Verify the resources creates using IaC in AWS management console
 ______________________________
 Step 5: If you want to delete the resources use terraform destroy command
-_______________________________
-terraform destroy
+
+__terraform destroy__
+_____________________________
