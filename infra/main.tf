@@ -278,3 +278,13 @@ resource "aws_route53_record" "cert_validation_record" {
   ttl      = 60
   records   = [aws_acm_certificate.keerthi_cert.domain_validation_options[count.index].resource_record_value]
 }
+
+# Bastion Host EC2 Instance
+resource "aws_instance" "bastion" {
+  ami                    = "ami-06b21ccaeff8cd686" 
+  instance_type          = "t2.medium"  
+  subnet_id              = aws_subnet.public_subnet_1.id
+  vpc_security_group_ids = [aws_security_group.bastion_sg.id]
+  key_name               = "myKeyPair" 
+  tags = {  Name = "BastionHost"  }
+}
