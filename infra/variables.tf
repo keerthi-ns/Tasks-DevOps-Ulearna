@@ -19,3 +19,8 @@ variable "db_password" {
   default = "bvfr45s13s4!!@"
   description = "postgres password"
 }
+
+variable "ecr_name" {
+  default = "my-ECR"
+  description = "ECR repo Name"
+}
