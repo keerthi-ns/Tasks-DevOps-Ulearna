@@ -270,13 +270,15 @@ resource "aws_route53_record" "CloudFront_record" {
 
 # DNS Validation for ACM Certificate 
 resource "aws_route53_record" "cert_validation_record" {
-  count = length(aws_acm_certificate.keerthi_cert.domain_validation_options)
+  for_each = { for dvo in aws_acm_certificate.keerthi_cert.domain_validation_options : dvo.domain_name => dvo }
+
   zone_id = aws_route53_zone.main_zone.id
-  name     = aws_acm_certificate.keerthi_cert.domain_validation_options[count.index].resource_record_name
-  type     = aws_acm_certificate.keerthi_cert.domain_validation_options[count.index].resource_record_type
-  ttl      = 60
-  records   = [aws_acm_certificate.keerthi_cert.domain_validation_options[count.index].resource_record_value]
+  name    = each.value.resource_record_name
+  type    = each.value.resource_record_type
+  ttl     = 60
+  records = [each.value.resource_record_value]
 }
+
 
 # Bastion Host EC2 Instance
 resource "aws_instance" "bastion" {
@@ -407,7 +409,213 @@ resource "aws_db_instance" "postgres" {
   tags = {    Name = "My-Postgres-DB"  }
 }
 
+#ECR repo
 resource "aws_ecr_repository" "ecr_repository" {
   name                 = var.ecr_name
   image_tag_mutability = "MUTABLE"
+}
+
+#Code Build
+resource "aws_codebuild_project" "nextjs_build" {
+  name          = "NextJSBuild"
+  source {
+    type            = "CODEPIPELINE"
+    buildspec       = "./infra/buildspec.yml" 
+  }  
+  environment {
+    compute_type      = "BUILD_GENERAL1_SMALL"
+    image             = "aws/codebuild/standard:5.0"
+    type              = "LINUX_CONTAINER"
+    privileged_mode   = true  
+  }
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+  service_role = aws_iam_role.codebuild_service_role.arn
+}
+
+resource "aws_codepipeline" "pipeline" {
+  name     = "MyApplicationPipeline"
+  role_arn = aws_iam_role.codepipeline_role.arn
+  artifact_store {
+    type = "S3"
+    location = aws_s3_bucket.terra_bucket.bucket
+  }
+  stage {
+    name = "Source"
+    action {
+      name             = "Source"
+      category         = "Source"
+      owner            = "AWS"
+      provider         = "CodeCommit"
+      version          = "1"
+      output_artifacts = ["source_output"]
+      configuration = {
+        RepositoryName = "my-repo"
+        BranchName     = "main"
+      }
+    }
+  }
+
+  stage {
+    name = "Build"
+    action {
+      name             = "Build"
+      category         = "Build"
+      owner            = "AWS"
+      provider         = "CodeBuild"
+      version          = "1"
+      input_artifacts  = ["source_output"]
+      output_artifacts = ["build_output"]
+      configuration = {
+        ProjectName = aws_codebuild_project.nextjs_build.name
+      }
+    }
+  }
+}
+
+#SNS
+resource "aws_sns_topic" "my_sns_topic" {
+  name = "MyAlertTopic"
+}
+
+resource "aws_sns_topic_subscription" "email_subscription" {
+  topic_arn = aws_sns_topic.my_sns_topic.arn
+  protocol  = "email"
+  endpoint  = "keerthiexample@gmail.com"  
+}
+
+# Monitoring for EKS
+resource "aws_cloudwatch_metric_alarm" "eks_cpu_alarm" {
+  alarm_name          = "EKS-HighCPUAlarm"
+  metric_name         = "CPUUtilization"
+  namespace           = "ContainerInsights"
+  dimensions = {
+    ClusterName = aws_eks_cluster.eks_cluster.name
+  }
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  period              = 300
+  evaluation_periods  = 2
+  alarm_actions       = [aws_sns_topic.my_sns_topic.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "eks_memory_alarm" {
+  alarm_name          = "EKS-HighMemoryAlarm"
+  metric_name         = "MemoryUtilization"
+  namespace           = "ContainerInsights"
+  dimensions = {
+    ClusterName = aws_eks_cluster.eks_cluster.name
+  }
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  period              = 300
+  evaluation_periods  = 2
+  alarm_actions       = [aws_sns_topic.my_sns_topic.arn]
+}
+
+# Monitoring for RDS
+resource "aws_cloudwatch_metric_alarm" "rds_cpu_alarm" {
+  alarm_name          = "RDS-HighCPUAlarm"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.postgres.id
+  }
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  period              = 300
+  evaluation_periods  = 2
+  alarm_actions       = [aws_sns_topic.my_sns_topic.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "rds_memory_alarm" {
+  alarm_name          = "RDS-HighMemoryAlarm"
+  metric_name         = "FreeableMemory"
+  namespace           = "AWS/RDS"
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.postgres.id
+  }
+  statistic           = "Average"
+  comparison_operator = "LessThanThreshold"
+  threshold           = 200000000  # Adjust threshold as needed
+  period              = 300
+  evaluation_periods  = 2
+  alarm_actions       = [aws_sns_topic.my_sns_topic.arn]
+}
+
+
+resource "aws_iam_role" "codepipeline_role" {
+  name = "CodePipelineRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "codepipeline.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# Attach policies to allow the CodePipeline role to access necessary resources
+resource "aws_iam_policy_attachment" "codepipeline_access" {
+  name       = "codepipeline-access"
+  roles      = [aws_iam_role.codepipeline_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodePipelineFullAccess"
+}
+
+resource "aws_iam_policy_attachment" "s3_access" {
+  name       = "s3-access"
+  roles      = [aws_iam_role.codepipeline_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+resource "aws_iam_policy_attachment" "codebuild_access" {
+  name       = "codebuild-access"
+  roles      = [aws_iam_role.codepipeline_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"
+}
+
+resource "aws_iam_role" "codebuild_service_role" {
+  name = "CodeBuildServiceRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "codebuild.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# Attach policies for CodeBuild to interact with necessary AWS resources
+resource "aws_iam_policy_attachment" "codebuild_s3_access" {
+  name       = "codebuild-s3-access"
+  roles      = [aws_iam_role.codebuild_service_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+resource "aws_iam_policy_attachment" "codebuild_logs_access" {
+  name       = "codebuild-logs-access"
+  roles      = [aws_iam_role.codebuild_service_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+}
+
+resource "aws_iam_policy_attachment" "codebuild_basic_access" {
+  name       = "codebuild-basic-access"
+  roles      = [aws_iam_role.codebuild_service_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"
 }
