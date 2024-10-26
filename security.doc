@@ -1,0 +1,25 @@
+SECURITY MEASURES
+------------------------
+
+1. VPC Isolation: Ensures network isolation and control over inbound and outbound traffic.
+
+2. IAM Roles and Policies: Manages user access and permissions with least privilege principle.
+
+3. Security Groups and NACLs: Controls traffic to and from resources.
+
+4. Encryption: Data encryption at rest using AWS KMS and in transit using SSL/TLS.
+
+5. Logging and Monitoring: Enables CloudTrail, CloudWatch, and GuardDuty for audit and monitoring.
+
+COST OPTIMIZATION STRATEGIES
+--------------------------------
+
+1. Autoscaling: Automatically adjusts the number of instances based on demand to avoid over-provisioning.
+
+2. Spot Instances: Uses spot instances for non-critical workloads to benefit from lower costs.
+
+3. Reserved Instances: Purchases reserved instances for predictable workloads to save up to 75% compared to on-demand instances.
+
+4. Right Sizing: Continuously monitors and adjusts the instance sizes to match the workload requirements.
+
+5. S3 Lifecycle Policies: Moves data to lower-cost storage classes (e.g., infrequent access, glacier) based on access patterns.
