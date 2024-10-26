@@ -1,3 +1,6 @@
+#---------------------------------------------------------------------------
+#----------------VPC, SUBNETS, ROUTE TABLE, INTERNET AND NAT GATEWAY---------------
+
 #VPC
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
@@ -102,16 +105,20 @@ resource "aws_route53_zone" "main_zone" {
   tags = {    Name = "MainHostedZone"  }
 }
 
-# Load Balancer 
-resource "aws_lb" "main_lb" {
-  name               = "main-load-balancer"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.lb_sg.id]
-  subnets            = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
-  tags = {  Name = "Main-LB" }
+# A Record set in Route 53
+resource "aws_route53_record" "CloudFront_record" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = "www.${var.domain_name}"  
+  type    = "A"
+  alias {
+    name                   = aws_cloudfront_distribution.my_distribution.domain_name 
+    zone_id                = aws_cloudfront_distribution.my_distribution.hosted_zone_id  
+    evaluate_target_health = true
+  }
 }
 
+#----------------------------------------------------------
+#---------------SECURITY GROUPS-----------------------
 
 # Security groups for bastion
 resource "aws_security_group" "bastion_sg" {
@@ -201,6 +208,9 @@ resource "aws_security_group" "rds_sg" {
   tags = {    Name = "RDS-SG"  }
 }
 
+#-----------------------------------------------------------------
+#-------------------S3 BUCKET AND CLOUDFRONT----------------------
+
 #S3 Bucket
 resource "aws_s3_bucket" "terra_bucket" {
   bucket = "my-nextjs-terra-bucket090"  
@@ -249,24 +259,14 @@ resource "aws_cloudfront_distribution" "my_distribution" {
   tags = {  Name = "CloudFront Distribution-next"  }
 }
 
-# ACM Certificate
+#--------------------------ACM Certificate--------------------------------------------
+
 resource "aws_acm_certificate" "keerthi_cert" {
   domain_name       = var.domain_name  
   validation_method = "DNS"
   tags = {  Name = "ACM Certificate-next"  }
 }
 
-# A Record set in Route 53
-resource "aws_route53_record" "CloudFront_record" {
-  zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "www.${var.domain_name}"  
-  type    = "A"
-  alias {
-    name                   = aws_cloudfront_distribution.my_distribution.domain_name 
-    zone_id                = aws_cloudfront_distribution.my_distribution.hosted_zone_id  
-    evaluate_target_health = true
-  }
-}
 
 # DNS Validation for ACM Certificate 
 resource "aws_route53_record" "cert_validation_record" {
@@ -279,6 +279,17 @@ resource "aws_route53_record" "cert_validation_record" {
   records = [each.value.resource_record_value]
 }
 
+#---------------------------------LOAD BALANCER ----------------------------------
+resource "aws_lb" "main_lb" {
+  name               = "main-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.lb_sg.id]
+  subnets            = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
+  tags = {  Name = "Main-LB" }
+}
+
+#---------------------------EC2-------------------------------------------------
 
 # Bastion Host EC2 Instance
 resource "aws_instance" "bastion" {
@@ -289,6 +300,9 @@ resource "aws_instance" "bastion" {
   key_name               = "myKeyPair" 
   tags = {  Name = "BastionHost"  }
 }
+
+#---------------------------EKS AND FARGATE--------------------------------------
+
 
 #EKS Cluster
 resource "aws_eks_cluster" "eks_cluster" {
@@ -312,55 +326,6 @@ resource "aws_eks_fargate_profile" "my_fargate_profile" {
   selector {
     namespace = var.namespace
   }
-}
-
-#IAM Role-EKS Cluster
-resource "aws_iam_role" "eks_cluster_role" {
-  name = "eksClusterRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action    = "sts:AssumeRole"
-        Principal = {
-          Service = "eks.amazonaws.com"
-        }
-        Effect    = "Allow"
-        Sid       = ""
-      },
-    ]
-  })
-}
-
-# IAM Role-Fargate
-resource "aws_iam_role" "eks_fargate_role" {
-  name = "eksFargatePodExecutionRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action    = "sts:AssumeRole"
-        Principal = {
-          Service = "eks-fargate.amazonaws.com"
-        }
-        Effect    = "Allow"
-        Sid       = ""
-      },
-    ]
-  })
-}
-
-#IAM Policies Attachments
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  role       = aws_iam_role.eks_cluster_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "eks_fargate_policy" {
-  role       = aws_iam_role.eks_fargate_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
 }
 
 
@@ -389,6 +354,8 @@ resource "aws_lb_listener" "http_listener" {
 }
 
 
+#--------------------------------------------RDS (POSTGRESQL) ---------------------------------------
+
 # RDS PostgreSQL Instance in Private Subnet
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "rds-subnet-group"
@@ -409,11 +376,14 @@ resource "aws_db_instance" "postgres" {
   tags = {    Name = "My-Postgres-DB"  }
 }
 
-#ECR repo
+#----------------------ECR REPO----------------------------------------------------
+
 resource "aws_ecr_repository" "ecr_repository" {
   name                 = var.ecr_name
   image_tag_mutability = "MUTABLE"
 }
+
+#--------------- AWS CODEPIPELINE --------------------------------------------------------
 
 #Code Build
 resource "aws_codebuild_project" "nextjs_build" {
@@ -434,25 +404,48 @@ resource "aws_codebuild_project" "nextjs_build" {
   service_role = aws_iam_role.codebuild_service_role.arn
 }
 
-resource "aws_codepipeline" "pipeline" {
-  name     = "MyApplicationPipeline"
-  role_arn = aws_iam_role.codepipeline_role.arn
-  artifact_store {
-    type = "S3"
-    location = aws_s3_bucket.terra_bucket.bucket
+# CodeDeploy Application for EKS
+resource "aws_codedeploy_app" "nestjs_app" {
+  name = "nestjs-eks-codedeploy-app"
+  compute_platform = "EKS"
+}
+
+# CodeDeploy Deployment Group
+resource "aws_codedeploy_deployment_group" "nestjs_deployment_group" {
+  app_name              = aws_codedeploy_app.nestjs_app.name
+  deployment_group_name = "nestjs-eks-deployment-group"
+  blue_green_deployment_config {
+    terminate_blue_instances_on_deployment_success {
+      action  = "TERMINATE"
+    }
   }
+  service_role_arn = aws_iam_role.codedeploy_role.arn
+}
+
+# CodePipeline definition
+resource "aws_codepipeline" "my_pipeline" {
+  name     = "my-application-pipeline"
+  role_arn = aws_iam_role.codepipeline_role.arn
+
+  artifact_store {
+    location = aws_s3_bucket.terra_bucket.bucket
+    type     = "S3"
+  }
+
   stage {
     name = "Source"
     action {
-      name             = "Source"
+      name             = "GitSource"
       category         = "Source"
-      owner            = "AWS"
-      provider         = "CodeCommit"
+      owner            = "ThirdParty"
+      provider         = "GitHub"
       version          = "1"
       output_artifacts = ["source_output"]
       configuration = {
-        RepositoryName = "my-repo"
-        BranchName     = "main"
+        Owner      = "my-github-username"
+        Repo       = "Tasks-DevOps-Ulearna"
+        Branch     = "main"
+        OAuthToken = var.github_token
       }
     }
   }
@@ -460,11 +453,11 @@ resource "aws_codepipeline" "pipeline" {
   stage {
     name = "Build"
     action {
-      name             = "Build"
+      name             = "CodeBuild"
       category         = "Build"
       owner            = "AWS"
       provider         = "CodeBuild"
-      version          = "1"
+      version = "1"
       input_artifacts  = ["source_output"]
       output_artifacts = ["build_output"]
       configuration = {
@@ -472,7 +465,25 @@ resource "aws_codepipeline" "pipeline" {
       }
     }
   }
+
+  stage {
+    name = "Deploy"
+    action {
+      name             = "EKSDeploy"
+      category         = "Deploy"
+      owner            = "AWS"
+      provider         = "CodeBuild"
+      version = "1"
+      input_artifacts  = ["build_output"]
+      configuration = {
+        ApplicationName     = aws_codedeploy_app.nestjs_app.name
+        DeploymentGroupName = aws_codedeploy_deployment_group.nestjs_deployment_group.name
+      }
+    }
+  }
 }
+
+#-------------------------MONITORING---------------------------------------
 
 #SNS
 resource "aws_sns_topic" "my_sns_topic" {
@@ -547,19 +558,69 @@ resource "aws_cloudwatch_metric_alarm" "rds_memory_alarm" {
   alarm_actions       = [aws_sns_topic.my_sns_topic.arn]
 }
 
+#--------------------------------------------IAM ROLES-----------------------------------
 
-resource "aws_iam_role" "codepipeline_role" {
-  name = "CodePipelineRole"
+#IAM Role-EKS Cluster
+resource "aws_iam_role" "eks_cluster_role" {
+  name = "eksClusterRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Action    = "sts:AssumeRole"
         Principal = {
-          Service = "codepipeline.amazonaws.com"
+          Service = "eks.amazonaws.com"
         }
-        Action = "sts:AssumeRole"
+        Effect    = "Allow"
+        Sid       = ""
+      },
+    ]
+  })
+}
+
+# IAM Role-Fargate
+resource "aws_iam_role" "eks_fargate_role" {
+  name = "eksFargatePodExecutionRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Principal = {
+          Service = "eks-fargate.amazonaws.com"
+        }
+        Effect    = "Allow"
+        Sid       = ""
+      },
+    ]
+  })
+}
+
+#IAM Policies Attachments
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  role       = aws_iam_role.eks_cluster_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_fargate_policy" {
+  role       = aws_iam_role.eks_fargate_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
+}
+
+# IAM Role for CodePipeline
+resource "aws_iam_role" "codepipeline_role" {
+  name = "codepipeline-role"
+  assume_role_policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": "sts:AssumeRole",
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "codepipeline.amazonaws.com"
+        }
       }
     ]
   })
@@ -618,4 +679,28 @@ resource "aws_iam_policy_attachment" "codebuild_basic_access" {
   name       = "codebuild-basic-access"
   roles      = [aws_iam_role.codebuild_service_role.name]
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"
+}
+
+# IAM Role for CodeDeploy
+resource "aws_iam_role" "codedeploy_role" {
+  name = "CodeDeployEKSRole"
+  assume_role_policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "codedeploy.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# IAM Policy Attachment for EKS CodeDeploy
+resource "aws_iam_policy_attachment" "codedeploy_eks_policy_attachment" {
+  name       = "codedeploy-eks-policy-attachment"
+  roles      = [aws_iam_role.codedeploy_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }

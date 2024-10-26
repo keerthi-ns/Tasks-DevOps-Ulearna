@@ -14,8 +14,7 @@ This document provides instructions for deploying and testing the application, i
 1. [Prerequisites](#prerequisites)
 2. [Deployment Steps](#deployment-steps)
 3. [Testing the Application](#testing-the-application)
-4. [Application URLs and Endpoints](#application-urls-and-endpoints)
-5. [IAM Roles and Permissions](#iam-roles-and-permissions)
+4. [IAM Roles and Permissions](#iam-roles-and-permissions)
 
 ---
 
@@ -67,28 +66,8 @@ This document provides instructions for deploying and testing the application, i
 
 ---
 
-### 4. Application URLs and Endpoints
 
-- **Frontend URL** (Next.js):  
-  Access the CloudFront distribution URL from the AWS Console. Example:
-  ```
-  https://d123example.cloudfront.net
-  ```
-
-- **Backend Endpoints** (NestJS):
-  - **Base URL** (Load Balancer URL for EKS):  
-    ```plaintext
-    https://your-alb-url.amazonaws.com
-    ```
-  - **API Endpoints**:
-    - **GET** /api/items - Fetches a list of items
-    - **POST** /api/items - Adds a new item
-    - **PUT** /api/items/{id} - Updates an item
-    - **DELETE** /api/items/{id} - Deletes an item
-
----
-
-### 5. IAM Roles and Permissions
+### 4. IAM Roles and Permissions
 
 #### CodePipeline IAM Role
 

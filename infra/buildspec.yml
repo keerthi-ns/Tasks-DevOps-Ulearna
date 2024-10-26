@@ -9,4 +9,4 @@ phases:
       - npm run build
   post_build:
     commands:
-      - aws s3 sync out/ s3://my-nextjs-app-frontend --delete
+      - aws s3 sync out/ s3://terra_bucket --delete

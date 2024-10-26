@@ -18,9 +18,16 @@ variable "db_username" {
 variable "db_password" {
   default = "bvfr45s13s4!!@"
   description = "postgres password"
+  sensitive = true
 }
 
 variable "ecr_name" {
   default = "my-ECR"
   description = "ECR repo Name"
+}
+
+variable "github_token" {
+  default = 3028
+  type = number
+  sensitive = true
 }
