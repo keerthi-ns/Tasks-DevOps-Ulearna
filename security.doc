@@ -1,25 +1,40 @@
 SECURITY MEASURES
 ------------------------
 
-1. VPC Isolation: Ensures network isolation and control over inbound and outbound traffic.
+1. IAM Roles and Policies:
+Implemented IAM roles with policies adhering to the principle of least privilege. Each service has a dedicated role with only the necessary permissions to operate, reducing the risk of unauthorized access.
 
-2. IAM Roles and Policies: Manages user access and permissions with least privilege principle.
+2. Secure EC2 Bastion Host:
+Deployed an EC2 bastion host in a public subnet to securely access resources in private subnets.
+Used key pairs for SSH access and restricted access via a security group to specific IP addresses, minimizing exposure to potential attacks.
 
-3. Security Groups and NACLs: Controls traffic to and from resources.
+3. SSL/TLS for Secure Connections:
+Configured AWS Certificate Manager (ACM) to issue SSL/TLS certificates for secure HTTPS connections.
+Implemented HTTPS on CloudFront and EKS services, ensuring that all data in transit is encrypted and secure from eavesdropping.
 
-4. Encryption: Data encryption at rest using AWS KMS and in transit using SSL/TLS.
+4. Security Groups:
+Defined granular security group rules for the bastion host, ECS tasks, and RDS instance, allowing only necessary traffic and access.
+Ensured that the RDS instance is only accessible from the ECS tasks, protecting sensitive database information.
 
-5. Logging and Monitoring: Enables CloudTrail, CloudWatch, and GuardDuty for audit and monitoring.
+5. Regular Monitoring and Logging:
+Enabled CloudWatch for monitoring services and configured alarms for unusual activity (e.g., high CPU usage or memory pressure).
+Implemented logging for access and changes to resources to maintain an audit trail and facilitate incident response.
+
 
 COST OPTIMIZATION STRATEGIES
 --------------------------------
 
-1. Autoscaling: Automatically adjusts the number of instances based on demand to avoid over-provisioning.
+1. Auto Scaling:
+Configured auto-scaling policies for EKS Fargate to automatically adjust the number of running tasks based on demand, ensuring resources are provisioned efficiently and only when needed. This minimizes costs during low usage periods.
 
-2. Spot Instances: Uses spot instances for non-critical workloads to benefit from lower costs.
+2. Spot Instances:
+Considered using Spot Instances for non-critical workloads where interruptions are acceptable. Spot Instances can significantly reduce costs compared to On-Demand instances, providing a cost-effective solution for batch processing or development environments.
 
-3. Reserved Instances: Purchases reserved instances for predictable workloads to save up to 75% compared to on-demand instances.
+3. S3 for Static Assets:
+Utilized Amazon S3 for serving static assets (Next.js frontend), allowing for cost-effective storage and data delivery without the need for provisioning additional EC2 instances.
 
-4. Right Sizing: Continuously monitors and adjusts the instance sizes to match the workload requirements.
+4. CloudFront for Content Delivery:
+Implemented Amazon CloudFront to cache and deliver content from S3 globally, reducing latency and data transfer costs while improving application performance.
 
-5. S3 Lifecycle Policies: Moves data to lower-cost storage classes (e.g., infrequent access, glacier) based on access patterns.
+5. Resource Tagging:
+Employed resource tagging to monitor and analyze spending by project or department, making it easier to identify underutilized resources and areas for further cost savings.
